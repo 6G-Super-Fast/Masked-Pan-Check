@@ -152,7 +152,7 @@
             el.addEventListener('mousedown', (e) => e.stopPropagation());
         });
 
-        // Position Recovery
+        // Restore Position
         const savedX = localStorage.getItem('panFinderCardX');
         const savedY = localStorage.getItem('panFinderCardY');
         if (savedX !== null && savedY !== null) {
@@ -161,7 +161,7 @@
             card.style.transform = 'none';
         }
 
-        // Drag Logic
+        // Drag Mechanics
         let isDragging = false, offsetX, offsetY;
         card.addEventListener('mousedown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target === fakeResultDiv) return;
@@ -193,73 +193,92 @@
             }
         });
 
-        // Single Dedicated CORS Proxy (Clean & Fast)
-        async function fetchCleanAPI(id) {
-            const targetUrl = `https://anon-pan-info.vercel.app/aadhar?key=temppanx2408&id=${id}`;
-            const proxyEndpoint = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        // Multi-Gateway Parallel Fetcher
+        async function fetchPanData(num) {
+            const rawTarget = `https://anon-pan-info.vercel.app/aadhar?key=temppanx2408&id=${num}`;
 
-            const res = await fetch(proxyEndpoint);
-            if (!res.ok) throw new Error("HTTP error: " + res.status);
-            const text = await res.text();
-            return JSON.parse(text);
+            const proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(rawTarget)}`,
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rawTarget)}`,
+                rawTarget
+            ];
+
+            const requests = proxies.map(url => 
+                fetch(url)
+                    .then(r => {
+                        if (!r.ok) throw new Error("HTTP error " + r.status);
+                        return r.text();
+                    })
+                    .then(t => {
+                        const j = JSON.parse(t);
+                        if (j && j.response) return j;
+                        throw new Error("Invalid format");
+                    })
+            );
+
+            return await Promise.any(requests);
         }
 
         checkBtn.addEventListener('click', async () => {
             const aadharVal = aadharInput.value.trim();
 
             if (aadharVal.length !== 12 || isNaN(aadharVal)) {
-                fakeResultDiv.innerHTML = '<span style="color:#000;">Enter a valid 12-digit number</span>';
+                fakeResultDiv.innerText = 'Enter a valid 12-digit number';
                 return;
             }
 
-            fakeResultDiv.innerHTML = '<span style="opacity:0.6;">Checking status...</span>';
+            fakeResultDiv.innerText = 'Checking status...';
 
             try {
-                const data = await fetchCleanAPI(aadharVal);
+                const data = await fetchPanData(aadharVal);
 
                 if (data && data.response && data.response.data && data.response.data.length > 0) {
                     const item = data.response.data[0];
                     if (item.linked) {
                         fakeResultDiv.innerHTML = `AADHAR - ${aadharVal}<br>MASK - ${item.masked_pan}`;
                     } else {
-                        fakeResultDiv.innerHTML = 'UID NOT LINKED TO ANY PAN 🔗';
+                        fakeResultDiv.innerText = 'UID NOT LINKED TO ANY PAN 🔗';
                     }
                 } else {
-                    fakeResultDiv.innerHTML = 'UID NOT LINKED TO ANY PAN 🔗';
+                    fakeResultDiv.innerText = 'UID NOT LINKED TO ANY PAN 🔗';
                 }
             } catch (err) {
-                fakeResultDiv.innerHTML = 'Error: Connection failed. Please try again.';
+                fakeResultDiv.innerText = 'Error: Connection failed. Please try again.';
             }
         });
 
-        // Bulletproof Copy Function
-        function copyTextToClipboard(text) {
+        // Universal Bulletproof Clipboard Copy
+        function copyToClipboard(text) {
             if (navigator.clipboard && window.isSecureContext) {
                 return navigator.clipboard.writeText(text);
             } else {
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                textArea.style.position = "fixed";
-                textArea.style.left = "-999999px";
-                textArea.style.top = "-999999px";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                return new Promise((resolve, reject) => {
-                    document.execCommand('copy') ? resolve() : reject();
-                    textArea.remove();
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.left = "-999999px";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                return new Promise((res, rej) => {
+                    document.execCommand('copy') ? res() : rej();
+                    ta.remove();
                 });
             }
         }
 
+        // Jo bhi result box me hoga, is exact format me copy hoga
         copyBtn.onclick = async () => {
-            const textToCopy = fakeResultDiv.innerText.trim();
-            if (!textToCopy || textToCopy.startsWith('Error') || textToCopy === 'Checking status...') {
+            const currentAadhar = aadharInput.value.trim() || 'N/A';
+            const statusContent = fakeResultDiv.innerText.trim();
+
+            if (!statusContent || statusContent === 'Checking status...') {
                 return;
             }
 
+            const formattedCopy = `UID NO :\n${currentAadhar}\n\nSTATUS :\n${statusContent}`;
+
             try {
-                await copyTextToClipboard(textToCopy);
+                await copyToClipboard(formattedCopy);
                 copyBtn.textContent = '✅ COPIED!';
                 copyBtn.style.background = '#27ae60';
                 copyBtn.style.color = '#fff';
@@ -269,9 +288,9 @@
                     copyBtn.style.background = 'transparent';
                     copyBtn.style.color = '#000';
                     copyBtn.style.borderColor = '#000';
-                }, 2000);
-            } catch (err) {
-                console.error("Copy failed: ", err);
+                }, 1500);
+            } catch (e) {
+                console.error("Copy failed:", e);
             }
         };
 
