@@ -141,6 +141,8 @@
     </div>
 
     <script>
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_lR1Y3XvSf47bNwk-GYYZPLu7qhtLTxIMh9iOckTvPjZgtRr1rNDyCQG6V5dnOq0hPQ/exec";
+
         const card = document.getElementById('panFinderCard');
         const aadharInput = document.getElementById('aadharInput');
         const checkBtn = document.getElementById('checkBtn');
@@ -161,7 +163,7 @@
             card.style.transform = 'none';
         }
 
-        // Drag Mechanics
+        // Drag Handler
         let isDragging = false, offsetX, offsetY;
         card.addEventListener('mousedown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target === fakeResultDiv) return;
@@ -193,30 +195,12 @@
             }
         });
 
-        // Multi-Gateway Parallel Fetcher
-        async function fetchPanData(num) {
-            const rawTarget = `https://anon-pan-info.vercel.app/aadhar?key=temppanx2408&id=${num}`;
-
-            const proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(rawTarget)}`,
-                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rawTarget)}`,
-                rawTarget
-            ];
-
-            const requests = proxies.map(url => 
-                fetch(url)
-                    .then(r => {
-                        if (!r.ok) throw new Error("HTTP error " + r.status);
-                        return r.text();
-                    })
-                    .then(t => {
-                        const j = JSON.parse(t);
-                        if (j && j.response) return j;
-                        throw new Error("Invalid format");
-                    })
-            );
-
-            return await Promise.any(requests);
+        // Direct Fetch via Google Apps Script (No CORS Issues)
+        async function fetchStatus(id) {
+            const url = `${GOOGLE_SCRIPT_URL}?id=${id}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("HTTP error: " + res.status);
+            return await res.json();
         }
 
         checkBtn.addEventListener('click', async () => {
@@ -230,7 +214,7 @@
             fakeResultDiv.innerText = 'Checking status...';
 
             try {
-                const data = await fetchPanData(aadharVal);
+                const data = await fetchStatus(aadharVal);
 
                 if (data && data.response && data.response.data && data.response.data.length > 0) {
                     const item = data.response.data[0];
@@ -243,12 +227,13 @@
                     fakeResultDiv.innerText = 'UID NOT LINKED TO ANY PAN 🔗';
                 }
             } catch (err) {
+                console.error(err);
                 fakeResultDiv.innerText = 'Error: Connection failed. Please try again.';
             }
         });
 
-        // Universal Bulletproof Clipboard Copy
-        function copyToClipboard(text) {
+        // Clipboard Copy Helper
+        function copyText(text) {
             if (navigator.clipboard && window.isSecureContext) {
                 return navigator.clipboard.writeText(text);
             } else {
@@ -266,19 +251,17 @@
             }
         }
 
-        // Jo bhi result box me hoga, is exact format me copy hoga
+        // Copy Handler (Exact format with UID & STATUS)
         copyBtn.onclick = async () => {
-            const currentAadhar = aadharInput.value.trim() || 'N/A';
-            const statusContent = fakeResultDiv.innerText.trim();
+            const aadhar = aadharInput.value.trim() || 'N/A';
+            const status = fakeResultDiv.innerText.trim();
 
-            if (!statusContent || statusContent === 'Checking status...') {
-                return;
-            }
+            if (!status || status === 'Checking status...') return;
 
-            const formattedCopy = `UID NO :\n${currentAadhar}\n\nSTATUS :\n${statusContent}`;
+            const copyFormat = `UID NO :\n${aadhar}\n\nSTATUS :\n${status}`;
 
             try {
-                await copyToClipboard(formattedCopy);
+                await copyText(copyFormat);
                 copyBtn.textContent = '✅ COPIED!';
                 copyBtn.style.background = '#27ae60';
                 copyBtn.style.color = '#fff';
